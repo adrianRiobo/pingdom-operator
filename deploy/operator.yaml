@@ -15,7 +15,7 @@ spec:
       serviceAccountName: pingdom-operator
       containers:
         - name: pingdom-operator
-          image: adrianriobo/pingdom-operator:0.1
+          image: adrianriobo/pingdom-operator:0.2
           command:
           - pingdom-operator
           imagePullPolicy: Always

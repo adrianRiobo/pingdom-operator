@@ -1,6 +1,15 @@
 # pingdom-operator
 k8s sample operator
 
+# Build
+
+```
+# Build operator
+operator-sdk build adrianriobo/pingdom-operator:0.1
+# Push operator
+docker push adrianriobo/pingdom-operator:0.1
+```
+
 # Deploy
 
 ```

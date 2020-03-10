@@ -17,6 +17,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
+        //"github.com/russellcardullo/go-pingdom/pingdom"
 )
 
 var log = logf.Log.WithName("controller_pingdomcheck")
@@ -99,6 +100,38 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+
+        // Get configmap to configure pingdomclient
+        // Update the App status with the pod names.
+	// List the pods for this app's deployment.
+	configMapList := &corev1.ConfigMapList{}
+	listOpts := []client.ListOption{
+		client.InNamespace(request.Namespace),
+	}
+	if err = r.client.List(context.TODO(), configMapList, listOpts...); err != nil {
+		reqLogger.Error(err, "error")
+	}
+        for _, configMap := range configMapList.Items {
+                reqLogger.Info("name=%q", configMap.Metadata.Name)
+	}
+
+
+        //var pingdomConfig corev1.ConfigMapList
+        //if err := r.client.List(context.TODO(), "", &pingdomConfig); err != nil {
+        //  reqLogger.Error(err, "error")
+        //}
+        //for _, pingdomConfig := range pingdomConfig.Items {
+        //  reqLogger.Info("name=%q", *pingdomConfig.Metadata.Name)
+        //}
+        
+        // Added client to pingdom
+        //pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
+	//	User:     "usermail",
+	//	Password: "pass",
+	//	APIKey:   "apikey",
+	//})
+        //pingdomChecks, _ := pingdomClient.Checks.List()
+        //reqLogger.Info("All checks:", pingdomChecks)
 
 	// Define a new Pod object
 	pod := newPodForCR(instance)

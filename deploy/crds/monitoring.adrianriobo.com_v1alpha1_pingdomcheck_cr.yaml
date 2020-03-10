@@ -1,8 +1,9 @@
 apiVersion: monitoring.adrianriobo.com/v1alpha1
 kind: PingdomCheck
 metadata:
-  name: example-pingdomcheck
+  name: badurl
 spec:
   # Add fields here
   name: test
-  url: https://www.google.com
+  #url: https://www.google.com
+  url: badurl
