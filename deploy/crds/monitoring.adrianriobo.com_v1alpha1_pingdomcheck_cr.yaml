@@ -4,4 +4,5 @@ metadata:
   name: example-pingdomcheck
 spec:
   # Add fields here
-  size: 3
+  name: test
+  url: https://www.google.com
