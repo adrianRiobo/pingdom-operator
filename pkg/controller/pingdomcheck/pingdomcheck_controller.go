@@ -6,12 +6,12 @@ import (
 	monitoringv1alpha1 "github.com/adrianRiobo/pingdom-operator/pkg/apis/monitoring/v1alpha1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	"k8s.io/apimachinery/pkg/types"
+	//"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
+	//"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -19,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
         "github.com/russellcardullo/go-pingdom/pingdom"
         "os"
+        "net/url"
 )
 
 var log = logf.Log.WithName("controller_pingdomcheck")
@@ -60,13 +61,14 @@ func newReconciler(mgr manager.Manager) reconcile.Reconciler {
         } else {
           log.Info("Info de client", "", pingdomClient)
         }
+        /*
         pingdomChecks, err := pingdomClient.Checks.List()
         if err != nil {
           log.Error(err, "Error listing checks")
         }
         log.Info("All checks intial:", "all checks", pingdomChecks)
-        
-	return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme(), pingdomClient: *pingdomClient}
+        */
+	return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme(), pingdomClient: pingdomClient}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -105,7 +107,7 @@ type ReconcilePingdomCheck struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
-        pingdomClient pingdom.Client
+        pingdomClient *pingdom.Client
 }
 
 // Reconcile reads that state of the cluster for a PingdomCheck object and makes changes based on the state read
@@ -132,60 +134,37 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-        // Get Secret
-        founds := &corev1.Secret{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "pingdom-credentials", Namespace: request.Namespace}, founds)
-	if err != nil {
-	 	if errors.IsNotFound(err) {
-			return reconcile.Result{Requeue: true}, nil
-		} else {
-                    
+        parsedUrl, err := url.Parse(instance.Spec.URL)
+        //Create the http check
+        newCheck := pingdom.HttpCheck{Name: instance.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
+	check, err := r.pingdomClient.Checks.Create(&newCheck)
+        if err != nil {
+          log.Error(err, "Error creating check")
+        } else {
+          instance.Status.ID = check.ID
+          err := r.client.Status().Update(context.TODO(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Memcached status.")
 			return reconcile.Result{}, err
 		}
-	}
-        reqLogger.Info("Getting Secret", "Secret.Name", founds.Name, "Secret.Data.username", founds.Data["username"])
- 
-        if e := os.Getenv("PD_USERNAME"); e != "" {
-		reqLogger.Info("Getting Secret", "Secret.Data.username", e)
-	}
+          log.Info("Created http check:", "with ID", instance.Status.ID)
+        }
+        //instance.Status.ID = check.ID
+        // Update state with check.id
         
-
-        // Get configmap to configure pingdomclient
-        // Update the App status with the pod names.
-	// List the pods for this app's deployment.
-	configMapList := &corev1.ConfigMapList{}
-	listOpts := []client.ListOption{
-		client.InNamespace(request.Namespace),
-	}
-	if err = r.client.List(context.TODO(), configMapList, listOpts...); err != nil {
-		reqLogger.Error(err, "error")
-	}
+        /*
         for i, configMap := range configMapList.Items {
                 reqLogger.Info("Getting Configmap", "Configmap,Name", i, "BAD", configMap.Name)
 	}
+        */
 
-
-        //var pingdomConfig corev1.ConfigMapList
-        //if err := r.client.List(context.TODO(), "", &pingdomConfig); err != nil {
-        //  reqLogger.Error(err, "error")
-        //}
-        //for _, pingdomConfig := range pingdomConfig.Items {
-        //  reqLogger.Info("name=%q", *pingdomConfig.Metadata.Name)
-        //}
+        pingdomChecks, err := r.pingdomClient.Checks.List()
+        if err != nil {
+          log.Error(err, "Error listing checks")
+        }
+        log.Info("All checks intial:", "all checks", pingdomChecks)
         
-        // Added client to pingdom
-        //pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
-	//	User:     "usermail",
-	//	Password: "pass",
-	//	APIKey:   "apikey",
-	//})
-        pingdomChecks, _ := r.pingdomClient.Checks.List()
-        //for _, pingdomCheck := range pingdomChecks.Items {
-        //  reqLogger.Info("Pingdom CHeck names:", "pingdom check name", pingdomCheck.Name)
-        //}
-
-        reqLogger.Info("All checks:", "all checks", pingdomChecks)
-
+        /*
 	// Define a new Pod object
 	pod := newPodForCR(instance)
 
@@ -212,28 +191,7 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 
 	// Pod already exists - don't requeue
 	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
+        */
 	return reconcile.Result{}, nil
 }
 
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *monitoringv1alpha1.PingdomCheck) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
-				},
-			},
-		},
-	}
-}

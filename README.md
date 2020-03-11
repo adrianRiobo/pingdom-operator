@@ -1,6 +1,20 @@
 # pingdom-operator
 k8s sample operator
 
+# About [pingdom](https://my.pingdom.com/)
+
+[api 3.1 announcement](https://royal.pingdom.com/announcing-the-pingdom-api-3-1/)
+[api 2.1 with apikey](https://my.pingdom.com/app/account/appkeys) vs [api 3.1 with api-tokens](https://my.pingdom.com/app/api-tokens)
+
+# Updating CRD
+
+```
+# Update go generated resoruces
+operator-sdk generate k8s
+# Generate CRD manifests
+operator-sdk generate crds
+```
+
 # Build
 
 ```

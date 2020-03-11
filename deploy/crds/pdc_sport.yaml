@@ -1,0 +1,7 @@
+apiVersion: monitoring.adrianriobo.com/v1alpha1
+kind: PingdomCheck
+metadata:
+  name: sport
+spec:
+  name: sport
+  url: https://www.sport.es
