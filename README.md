@@ -6,6 +6,8 @@ k8s sample operator
 ```
 # Build operator
 operator-sdk build adrianriobo/pingdom-operator:0.1
+# Login docker hub
+docker login --username adrianriobo
 # Push operator
 docker push adrianriobo/pingdom-operator:0.1
 ```

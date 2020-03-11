@@ -111,8 +111,8 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 	if err = r.client.List(context.TODO(), configMapList, listOpts...); err != nil {
 		reqLogger.Error(err, "error")
 	}
-        for _, configMap := range configMapList.Items {
-                reqLogger.Info("name=%q", configMap.Metadata.Name)
+        for i, configMap := range configMapList.Items {
+                reqLogger.Info("Getting Configmap", "Configmap,Name", i, "BAD", configMap.Name)
 	}
 
 
