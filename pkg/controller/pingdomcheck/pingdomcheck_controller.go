@@ -17,16 +17,11 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-        //"github.com/russellcardullo/go-pingdom/pingdom"
+        "github.com/russellcardullo/go-pingdom/pingdom"
         "os"
 )
 
 var log = logf.Log.WithName("controller_pingdomcheck")
-
-/**
-* USER ACTION REQUIRED: This is a scaffold file intended for the user to modify with their own Controller
-* business logic.  Delete these comments after modifying this file.*
- */
 
 // Add creates a new PingdomCheck Controller and adds it to the Manager. The Manager will set fields on the Controller
 // and Start it when the Manager is Started.
@@ -36,7 +31,42 @@ func Add(mgr manager.Manager) error {
 
 // newReconciler returns a new reconcile.Reconciler
 func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-	return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme()}
+        //add here pingdom client initialization
+        user := os.Getenv("PD_USERNAME") 
+        if user == "" {
+	  log.Info("PD_USERNAME should be defined as ENV")
+        } else {
+          log.Info("Getting user for pingdom", "user", user)
+        }
+        password := os.Getenv("PD_PASSWORD")
+        if password == "" {
+          log.Info("PD_PASSWORD should be defined as ENV")
+        } else {
+          log.Info("Getting user for pingdom", "password", password)
+        }
+        apikey := os.Getenv("PD_APIKEY")
+        if apikey == "" {
+          log.Info("PD_APIKEY should be defined as ENV")
+        } else {
+          log.Info("Getting user for pingdom", "apikey", apikey)
+        }
+        pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
+              User:     user,
+              Password: password,
+              APIKey:   apikey,
+        })
+        if err != nil {
+          log.Info("Error creating pingdom client")
+        } else {
+          log.Info("Info de client", "", pingdomClient)
+        }
+        pingdomChecks, err := pingdomClient.Checks.List()
+        if err != nil {
+          log.Error(err, "Error listing checks")
+        }
+        log.Info("All checks intial:", "all checks", pingdomChecks)
+        
+	return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme(), pingdomClient: *pingdomClient}
 }
 
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
@@ -62,7 +92,7 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 	if err != nil {
 		return err
 	}
-
+     
 	return nil
 }
 
@@ -75,6 +105,7 @@ type ReconcilePingdomCheck struct {
 	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
+        pingdomClient pingdom.Client
 }
 
 // Reconcile reads that state of the cluster for a PingdomCheck object and makes changes based on the state read
@@ -148,8 +179,12 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 	//	Password: "pass",
 	//	APIKey:   "apikey",
 	//})
-        //pingdomChecks, _ := pingdomClient.Checks.List()
-        //reqLogger.Info("All checks:", pingdomChecks)
+        pingdomChecks, _ := r.pingdomClient.Checks.List()
+        //for _, pingdomCheck := range pingdomChecks.Items {
+        //  reqLogger.Info("Pingdom CHeck names:", "pingdom check name", pingdomCheck.Name)
+        //}
+
+        reqLogger.Info("All checks:", "all checks", pingdomChecks)
 
 	// Define a new Pod object
 	pod := newPodForCR(instance)

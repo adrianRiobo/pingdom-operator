@@ -1,3 +1,4 @@
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
@@ -35,3 +36,13 @@ spec:
                 secretKeyRef:
                   name: pingdom-credentials
                   key: username
+            - name: PD_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pingdom-credentials
+                  key: password
+            - name: PD_APIKEY
+              valueFrom:
+                secretKeyRef:
+                  name: pingdom-credentials
+                  key: apikey
