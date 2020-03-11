@@ -15,6 +15,10 @@ docker push adrianriobo/pingdom-operator:0.1
 # Deploy
 
 ```
+# Create pingdom credentials
+deploy/secrets/create_secret.sh username password apikey
+kubectl create -f pingdomsecret.yaml
+rm pingdomsecret.yaml
 # Setup Service Account
 kubectl create -f deploy/service_account.yaml  
 # Setup RBAC  

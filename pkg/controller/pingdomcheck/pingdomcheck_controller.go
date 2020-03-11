@@ -18,6 +18,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
         //"github.com/russellcardullo/go-pingdom/pingdom"
+        "os"
 )
 
 var log = logf.Log.WithName("controller_pingdomcheck")
@@ -100,6 +101,23 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
+        // Get Secret
+        founds := &corev1.Secret{}
+	err = r.client.Get(context.TODO(), types.NamespacedName{Name: "pingdom-credentials", Namespace: request.Namespace}, founds)
+	if err != nil {
+	 	if errors.IsNotFound(err) {
+			return reconcile.Result{Requeue: true}, nil
+		} else {
+                    
+			return reconcile.Result{}, err
+		}
+	}
+        reqLogger.Info("Getting Secret", "Secret.Name", founds.Name, "Secret.Data.username", founds.Data["username"])
+ 
+        if e := os.Getenv("PD_USERNAME"); e != "" {
+		reqLogger.Info("Getting Secret", "Secret.Data.username", e)
+	}
+        
 
         // Get configmap to configure pingdomclient
         // Update the App status with the pod names.
