@@ -2,16 +2,11 @@ package pingdomcheck
 
 import (
 	"context"
-
 	monitoringv1alpha1 "github.com/adrianRiobo/pingdom-operator/pkg/apis/monitoring/v1alpha1"
-	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
-	//metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
-	//"k8s.io/apimachinery/pkg/types"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/controller"
-	//"sigs.k8s.io/controller-runtime/pkg/controller/controllerutil"
 	"sigs.k8s.io/controller-runtime/pkg/handler"
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 	"sigs.k8s.io/controller-runtime/pkg/manager"
@@ -20,82 +15,46 @@ import (
         "github.com/russellcardullo/go-pingdom/pingdom"
         "os"
         "net/url"
+        "github.com/go-logr/logr"
+)
+
+const (
+        pingdomCheckFinalizer = "finalizer.pingdomcheck"
+        env_username = "PD_USERNAME"
+        env_password = "PD_PASSWORD"
+        env_apikey = "PD_APIKEY"
 )
 
 var log = logf.Log.WithName("controller_pingdomcheck")
 
-// Add creates a new PingdomCheck Controller and adds it to the Manager. The Manager will set fields on the Controller
-// and Start it when the Manager is Started.
+
+
+// Add controller to Manager and Start it when the Manager is Started
 func Add(mgr manager.Manager) error {
 	return add(mgr, newReconciler(mgr))
 }
 
-// newReconciler returns a new reconcile.Reconciler
-func newReconciler(mgr manager.Manager) reconcile.Reconciler {
-        //add here pingdom client initialization
-        user := os.Getenv("PD_USERNAME") 
-        if user == "" {
-	  log.Info("PD_USERNAME should be defined as ENV")
-        } else {
-          log.Info("Getting user for pingdom", "user", user)
-        }
-        password := os.Getenv("PD_PASSWORD")
-        if password == "" {
-          log.Info("PD_PASSWORD should be defined as ENV")
-        } else {
-          log.Info("Getting user for pingdom", "password", password)
-        }
-        apikey := os.Getenv("PD_APIKEY")
-        if apikey == "" {
-          log.Info("PD_APIKEY should be defined as ENV")
-        } else {
-          log.Info("Getting user for pingdom", "apikey", apikey)
-        }
-        pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
-              User:     user,
-              Password: password,
-              APIKey:   apikey,
-        })
-        if err != nil {
-          log.Info("Error creating pingdom client")
-        } else {
-          log.Info("Info de client", "", pingdomClient)
-        }
-        /*
-        pingdomChecks, err := pingdomClient.Checks.List()
-        if err != nil {
-          log.Error(err, "Error listing checks")
-        }
-        log.Info("All checks intial:", "all checks", pingdomChecks)
-        */
-	return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme(), pingdomClient: pingdomClient}
-}
-
 // add adds a new Controller to mgr with r as the reconcile.Reconciler
 func add(mgr manager.Manager, r reconcile.Reconciler) error {
-	// Create a new controller
-	c, err := controller.New("pingdomcheck-controller", mgr, controller.Options{Reconciler: r})
-	if err != nil {
-		return err
-	}
+        // Create a new controller
+        c, err := controller.New("pingdomcheck-controller", mgr, controller.Options{Reconciler: r})
+        if err != nil {
+                return err
+        }
 
-	// Watch for changes to primary resource PingdomCheck
-	err = c.Watch(&source.Kind{Type: &monitoringv1alpha1.PingdomCheck{}}, &handler.EnqueueRequestForObject{})
-	if err != nil {
-		return err
-	}
+        // Watch for changes to primary resource PingdomCheck
+        err = c.Watch(&source.Kind{Type: &monitoringv1alpha1.PingdomCheck{}}, &handler.EnqueueRequestForObject{})
+        if err != nil {
+                return err
+        }
 
-	// TODO(user): Modify this to be the types you create that are owned by the primary resource
-	// Watch for changes to secondary resource Pods and requeue the owner PingdomCheck
-	err = c.Watch(&source.Kind{Type: &corev1.Pod{}}, &handler.EnqueueRequestForOwner{
-		IsController: true,
-		OwnerType:    &monitoringv1alpha1.PingdomCheck{},
-	})
-	if err != nil {
-		return err
-	}
-     
-	return nil
+        return nil
+}
+
+
+// Create the Reconciler
+func newReconciler(mgr manager.Manager) reconcile.Reconciler {
+        return &ReconcilePingdomCheck{client: mgr.GetClient(), scheme: mgr.GetScheme(), pingdomClient: createPingdomClient()}
 }
 
 // blank assignment to verify that ReconcilePingdomCheck implements reconcile.Reconciler
@@ -103,20 +62,12 @@ var _ reconcile.Reconciler = &ReconcilePingdomCheck{}
 
 // ReconcilePingdomCheck reconciles a PingdomCheck object
 type ReconcilePingdomCheck struct {
-	// This client, initialized using mgr.Client() above, is a split client
-	// that reads objects from the cache and writes to the apiserver
 	client client.Client
 	scheme *runtime.Scheme
         pingdomClient *pingdom.Client
 }
 
-// Reconcile reads that state of the cluster for a PingdomCheck object and makes changes based on the state read
-// and what is in the PingdomCheck.Spec
-// TODO(user): Modify this Reconcile function to implement your Controller logic.  This example creates
-// a Pod as an example
-// Note:
-// The Controller will requeue the Request to be processed again if the returned error is non-nil or
-// Result.Requeue is true, otherwise upon completion it will remove the work from the queue.
+// Reconcile resources lifecycle defined by PingdomCheck CRD
 func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.Result, error) {
 	reqLogger := log.WithValues("Request.Namespace", request.Namespace, "Request.Name", request.Name)
 	reqLogger.Info("Reconciling PingdomCheck")
@@ -126,72 +77,148 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
 	if err != nil {
 		if errors.IsNotFound(err) {
-			// Request object not found, could have been deleted after reconcile request.
-			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
-			// Return and don't requeue
+  			//Resource deleted after it can be managed
 			return reconcile.Result{}, nil
 		}
 		// Error reading the object - requeue the request.
 		return reconcile.Result{}, err
 	}
-        parsedUrl, err := url.Parse(instance.Spec.URL)
-        //Create the http check
-        newCheck := pingdom.HttpCheck{Name: instance.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
-	check, err := r.pingdomClient.Checks.Create(&newCheck)
-        if err != nil {
-          log.Error(err, "Error creating check")
+        // Manage PingdomCheck instance lifecycle
+        if instance.Status.ID == 0 {
+           	//New CRD create Http PingdomCheck
+           	if err := r.createHttpPingdomCheck(reqLogger, instance); err != nil {
+              		return reconcile.Result{}, err
+   		}
         } else {
-          instance.Status.ID = check.ID
-          err := r.client.Status().Update(context.TODO(), instance)
-		if err != nil {
-			reqLogger.Error(err, "Failed to update Memcached status.")
-			return reconcile.Result{}, err
-		}
-          log.Info("Created http check:", "with ID", instance.Status.ID)
+        	if instance.GetDeletionTimestamp() != nil {
+           		//CRD mark for deletion check finalizer and execute to allow gc
+           		if err := r.deleteHttpPingdomCheck(reqLogger, instance); err != nil {
+              			return reconcile.Result{}, err
+           		}
+        	} else {
+      			//CRD update check if external resource requires update
+                        log.Info("Updated http check:", "with ID", instance.Status.ID)
+                }
         }
-        //instance.Status.ID = check.ID
-        // Update state with check.id
-        
-        /*
-        for i, configMap := range configMapList.Items {
-                reqLogger.Info("Getting Configmap", "Configmap,Name", i, "BAD", configMap.Name)
-	}
-        */
-
-        pingdomChecks, err := r.pingdomClient.Checks.List()
-        if err != nil {
-          log.Error(err, "Error listing checks")
-        }
-        log.Info("All checks intial:", "all checks", pingdomChecks)
-        
-        /*
-	// Define a new Pod object
-	pod := newPodForCR(instance)
-
-	// Set PingdomCheck instance as the owner and controller
-	if err := controllerutil.SetControllerReference(instance, pod, r.scheme); err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Check if this Pod already exists
-	found := &corev1.Pod{}
-	err = r.client.Get(context.TODO(), types.NamespacedName{Name: pod.Name, Namespace: pod.Namespace}, found)
-	if err != nil && errors.IsNotFound(err) {
-		reqLogger.Info("Creating a new Pod", "Pod.Namespace", pod.Namespace, "Pod.Name", pod.Name)
-		err = r.client.Create(context.TODO(), pod)
-		if err != nil {
-			return reconcile.Result{}, err
-		}
-
-		// Pod created successfully - don't requeue
-		return reconcile.Result{}, nil
-	} else if err != nil {
-		return reconcile.Result{}, err
-	}
-
-	// Pod already exists - don't requeue
-	reqLogger.Info("Skip reconcile: Pod already exists", "Pod.Namespace", found.Namespace, "Pod.Name", found.Name)
-        */
 	return reconcile.Result{}, nil
 }
 
+
+
+// Delete http pingdom check 
+func (r *ReconcilePingdomCheck) deleteHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
+        if contains(p.GetFinalizers(), pingdomCheckFinalizer) {
+           //Execute finalizer
+           if err := r.finalizePingdomCheck(reqLogger, p, r.pingdomClient); err != nil {
+              return err
+           }
+           //Remove finalizers
+           p.SetFinalizers(remove(p.GetFinalizers(), pingdomCheckFinalizer))
+           err := r.client.Update(context.TODO(), p)
+           if err != nil {
+              return err
+           }
+        }
+        return nil
+}
+
+// Create http pingdom check 
+func (r *ReconcilePingdomCheck) createHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
+        parsedUrl, err := url.Parse(p.Spec.URL)
+        //Create the http check
+        newCheck := pingdom.HttpCheck{Name: p.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
+        check, err := r.pingdomClient.Checks.Create(&newCheck)
+
+        if err != nil {
+           log.Error(err, "Error creating check")
+        } else {
+           p.Status.ID = check.ID
+           err := r.client.Status().Update(context.TODO(), p)
+           if err != nil {
+              reqLogger.Error(err, "Failed to update PingdomCheck status.")
+              return err
+           }
+        }
+        // Add finalizer for this CR
+        if !contains(p.GetFinalizers(), pingdomCheckFinalizer) {
+           if err := r.addFinalizer(reqLogger, p); err != nil {
+              return err
+           }
+        }
+        log.Info("Created http check:", "with ID", p.Status.ID)
+        return nil
+}
+
+// Create pingdom client to manage checks within pingdom api 
+func createPingdomClient() *pingdom.Client {
+  	user := getEnv(env_username)
+  	password := getEnv(env_password)
+  	apikey := getEnv(env_apikey)
+
+  	//Should stop application if no pingomClient configuration
+  	pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
+           	User:     user,
+           	Password: password,
+           	APIKey:   apikey,
+        })
+  	if err != nil {
+    		//Stop application as client is required.
+  	} 
+  	return pingdomClient
+}
+
+//Finalizers
+func (r *ReconcilePingdomCheck) addFinalizer(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
+	reqLogger.Info("Adding Finalizer for the PingdomCheck")
+	p.SetFinalizers(append(p.GetFinalizers(), pingdomCheckFinalizer))
+
+	// Update CR
+	err := r.client.Update(context.TODO(), p)
+	if err != nil {
+		reqLogger.Error(err, "Failed to update PingdomCheck with finalizer")
+		return err
+	}
+	return nil
+}
+
+func (r *ReconcilePingdomCheck) finalizePingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck, pingdomClient *pingdom.Client) error {
+        _ , err := pingdomClient.Checks.Delete(p.Status.ID)
+        if err != nil {
+          	reqLogger.Error(err, "Error deleting Pingdomcheck")
+        } else {
+          	// Should check if response gives a 200 if not create override err
+          	reqLogger.Info("PingdomCheck remove sucessfully", "PingdomCheck ID", p.Status.ID)
+        }
+	return err
+}
+
+//Helper functions
+
+func getEnv(env string) string {
+  	value := os.Getenv(env)
+  	if value == "" {
+     		log.Info("Error getting ENV value", "ENV requierd:", env)
+  	} else {
+     		log.Info("Getting user for pingdom", "user", value)
+  	}
+  	return value
+}
+
+
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func remove(list []string, s string) []string {
+	for i, v := range list {
+		if v == s {
+			list = append(list[:i], list[i+1:]...)
+		}
+	}
+	return list
+}

@@ -1,6 +1,10 @@
 # pingdom-operator
 k8s sample operator
 
+# Overview
+
+[best practices](https://blog.openshift.com/kubernetes-operators-best-practices/)  
+
 # About [pingdom](https://my.pingdom.com/)
 
 [api 3.1 announcement](https://royal.pingdom.com/announcing-the-pingdom-api-3-1/)
