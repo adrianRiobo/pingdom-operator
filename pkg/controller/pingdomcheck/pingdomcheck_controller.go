@@ -96,8 +96,10 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
               			return reconcile.Result{}, err
            		}
         	} else {
-      			//CRD update check if external resource requires update
-                        log.Info("Updated http check:", "with ID", instance.Status.ID)
+      			//CRD update: check external resource, compare and act if required
+                        if err := r.updateHttpPingdomCheck(reqLogger, instance); err != nil {
+                                return reconcile.Result{}, err
+                        }
                 }
         }
 	return reconcile.Result{}, nil
@@ -122,13 +124,36 @@ func (r *ReconcilePingdomCheck) deleteHttpPingdomCheck(reqLogger logr.Logger, p 
         return nil
 }
 
+// Update pingdomcheck
+func (r *ReconcilePingdomCheck) updateHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
+	//Get check resource from pingdom
+	check, err := r.pingdomClient.Checks.Read(p.Status.ID)
+        if err != nil {
+		return err
+	}
+	parsedUrl, err := url.Parse(p.Spec.URL)
+       	if check.Name != p.Spec.Name || check.Hostname != parsedUrl.Host {
+		//Update required
+		updatedCheck := pingdom.HttpCheck{Name: p.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
+                _ , err := r.pingdomClient.Checks.Update(p.Status.ID, &updatedCheck)
+		if err != nil {
+           		log.Error(err, "Error updating check", "with ID", p.Status.ID)
+ 			return err
+        	}
+                log.Info("Updated http check:", "with ID", p.Status.ID)
+        } else {
+		//No updated required
+                log.Info("No action required for check:", "with ID", p.Status.ID)
+	}
+	return nil
+}
+
 // Create http pingdom check 
 func (r *ReconcilePingdomCheck) createHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
         parsedUrl, err := url.Parse(p.Spec.URL)
         //Create the http check
         newCheck := pingdom.HttpCheck{Name: p.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
         check, err := r.pingdomClient.Checks.Create(&newCheck)
-
         if err != nil {
            log.Error(err, "Error creating check")
         } else {
@@ -163,6 +188,8 @@ func createPingdomClient() *pingdom.Client {
         })
   	if err != nil {
     		//Stop application as client is required.
+                log.Error(err, "")
+                os.Exit(1)
   	} 
   	return pingdomClient
 }
