@@ -13,27 +13,51 @@ import (
      	"sigs.k8s.io/controller-runtime/pkg/reconcile"
         "github.com/russellcardullo/go-pingdom/pingdom" 
         "github.com/stretchr/testify/mock"
+       	//"github.com/stretchr/testify/assert"
+ 	"github.com/go-logr/logr"
 )
 
-var (
+const (
 	name            = "pingdom-operator"
 	namespace       = "pingdom"
 	check_name      = "unit-test"
         check_url      	= "https://unit.test"
+        check_id        = 5123
 )
 
-// Mocked service
-type MockedCheckService struct{
-  client *Client
+type MockPingdomClient struct{
   mock.Mock
 }
 
-func (mcs *MockedCheckService) Create(check Check) (*CheckResponse, error) { 
-	args := m.Called(check)
-	return nil, args.Error(1)
+func (m *MockPingdomClient) CreateHttpPingdomCheck(reqLogger logr.Logger, name string, url string) (int, error) {
+	args := m.Called(name, url)
+	return args.Int(0), args.Error(1)
 }
 
-func TestPingdomCheckController(t *testing.T) {
+func (m *MockPingdomClient) UpdateHttpPingdomCheck(reqLogger logr.Logger, ID int, name string, url string) error {
+ 	args := m.Called(ID, name, url)
+        return args.Error(0)
+}
+
+func (m *MockPingdomClient) DeleteHttpPingdomCheck(reqLogger logr.Logger, ID int) error {
+	args := m.Called(ID)
+        return args.Error(0)
+}
+
+func TestPingdomCheckControllerNewCheckOk(t *testing.T) {
+
+	// create an instance of our test object
+  	mockPingdomClient := new(MockPingdomClient)
+
+  	// setup expectations
+  	mockPingdomClient.On("CreateHttpPingdomCheck", mock.Anything, check_name, check_url).Return(check_id, nil)
+
+	//Assertion should check status from CR agaisnt check_id
+	//mockPingdomClient.AssertExpectations(t)
+	//expect.Equal(t, mockThing, actual, "should return a Thing")
+
+
+
 	pingdomcheck := getPingdomCheckCR()
 
        // Objects to track in the fake client.
@@ -53,14 +77,6 @@ func TestPingdomCheckController(t *testing.T) {
                 APIKey:   "apikey",
         })
 
-  	// create an instance of our test object
-  	testObj := new(MockedCheckService)
-
-  	// setup expectations
-  	testObj.On("Create", mock.Anything).Return(nil, nil)
-
-        pingdomClient.Checks = testObj
-	
 	r := &ReconcilePingdomCheck{client: cl, scheme: s, pingdomClient: pingdomClient}
 
 	// Mock request to simulate Reconcile() being called on an event for a

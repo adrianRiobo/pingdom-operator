@@ -12,9 +12,9 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/manager"
 	"sigs.k8s.io/controller-runtime/pkg/reconcile"
 	"sigs.k8s.io/controller-runtime/pkg/source"
-        "github.com/russellcardullo/go-pingdom/pingdom"
+        //"github.com/russellcardullo/go-pingdom/pingdom"
         "os"
-        "net/url"
+        //"net/url"
         "github.com/go-logr/logr"
 )
 
@@ -64,7 +64,7 @@ var _ reconcile.Reconciler = &ReconcilePingdomCheck{}
 type ReconcilePingdomCheck struct {
 	client client.Client
 	scheme *runtime.Scheme
-        pingdomClient *pingdom.Client
+        pingdomClient PingdomClient
 }
 
 // Reconcile resources lifecycle defined by PingdomCheck CRD
@@ -111,7 +111,7 @@ func (r *ReconcilePingdomCheck) Reconcile(request reconcile.Request) (reconcile.
 func (r *ReconcilePingdomCheck) deleteHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
         if contains(p.GetFinalizers(), pingdomCheckFinalizer) {
            //Execute finalizer
-           if err := r.finalizePingdomCheck(reqLogger, p, r.pingdomClient); err != nil {
+           if err := r.finalizePingdomCheck(reqLogger, p); err != nil {
               return err
            }
            //Remove finalizers
@@ -124,40 +124,35 @@ func (r *ReconcilePingdomCheck) deleteHttpPingdomCheck(reqLogger logr.Logger, p 
         return nil
 }
 
+func (r *ReconcilePingdomCheck) finalizePingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
+	err := r.pingdomClient.DeleteHttpPingdomCheck(reqLogger, p.Status.ID)
+	if err != nil {
+                reqLogger.Error(err, "Error deleting Pingdomcheck")
+        } else {
+                // Should check if response gives a 200 if not create override err
+                reqLogger.Info("PingdomCheck remove sucessfully", "PingdomCheck ID", p.Status.ID)
+        }
+        return err
+
+
+}
+
 // Update pingdomcheck
 func (r *ReconcilePingdomCheck) updateHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
-	//Get check resource from pingdom
-	check, err := r.pingdomClient.Checks.Read(p.Status.ID)
-        if err != nil {
-		return err
-	}
-	parsedUrl, err := url.Parse(p.Spec.URL)
-       	if check.Name != p.Spec.Name || check.Hostname != parsedUrl.Host {
-		//Update required
-		updatedCheck := pingdom.HttpCheck{Name: p.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
-                _ , err := r.pingdomClient.Checks.Update(p.Status.ID, &updatedCheck)
-		if err != nil {
-           		log.Error(err, "Error updating check", "with ID", p.Status.ID)
- 			return err
-        	}
-                log.Info("Updated http check:", "with ID", p.Status.ID)
-        } else {
-		//No updated required
-                log.Info("No action required for check:", "with ID", p.Status.ID)
-	}
-	return nil
+	err := r.pingdomClient.UpdateHttpPingdomCheck(reqLogger, p.Status.ID, p.Spec.Name, p.Spec.URL)
+	if err != nil {
+                log.Error(err, "Error updating check", "with ID", p.Status.ID)
+        }
+        return err
 }
 
 // Create http pingdom check 
 func (r *ReconcilePingdomCheck) createHttpPingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck) error {
-        parsedUrl, err := url.Parse(p.Spec.URL)
-        //Create the http check
-        newCheck := pingdom.HttpCheck{Name: p.Spec.Name, Hostname: parsedUrl.Host, Resolution: 5}
-        check, err := r.pingdomClient.Checks.Create(&newCheck)
+	ID, err := r.pingdomClient.CreateHttpPingdomCheck(reqLogger, p.Spec.Name, p.Spec.URL)
         if err != nil {
            log.Error(err, "Error creating check")
         } else {
-           p.Status.ID = check.ID
+           p.Status.ID = ID
            err := r.client.Status().Update(context.TODO(), p)
            if err != nil {
               reqLogger.Error(err, "Failed to update PingdomCheck status.")
@@ -175,18 +170,12 @@ func (r *ReconcilePingdomCheck) createHttpPingdomCheck(reqLogger logr.Logger, p 
 }
 
 // Create pingdom client to manage checks within pingdom api 
-func createPingdomClient() *pingdom.Client {
+func createPingdomClient() PingdomClient {
   	user := getEnv(env_username)
   	password := getEnv(env_password)
   	apikey := getEnv(env_apikey)
-
-  	//Should stop application if no pingomClient configuration
-  	pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
-           	User:     user,
-           	Password: password,
-           	APIKey:   apikey,
-        })
-  	if err != nil {
+        pingdomClient, err := NewRCPingdomClient(user, password, apikey)
+        if err != nil {
     		//Stop application as client is required.
                 log.Error(err, "")
                 os.Exit(1)
@@ -208,16 +197,6 @@ func (r *ReconcilePingdomCheck) addFinalizer(reqLogger logr.Logger, p *monitorin
 	return nil
 }
 
-func (r *ReconcilePingdomCheck) finalizePingdomCheck(reqLogger logr.Logger, p *monitoringv1alpha1.PingdomCheck, pingdomClient *pingdom.Client) error {
-        _ , err := pingdomClient.Checks.Delete(p.Status.ID)
-        if err != nil {
-          	reqLogger.Error(err, "Error deleting Pingdomcheck")
-        } else {
-          	// Should check if response gives a 200 if not create override err
-          	reqLogger.Info("PingdomCheck remove sucessfully", "PingdomCheck ID", p.Status.ID)
-        }
-	return err
-}
 
 //Helper functions
 
