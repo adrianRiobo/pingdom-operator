@@ -29,6 +29,12 @@ docker login --username adrianriobo
 # Push operator
 docker push adrianriobo/pingdom-operator:0.1
 ```
+# Testing 
+
+```
+# Unit testing 
+go test pkg/controller/pingdomcheck/*
+```
 
 # Deploy
 

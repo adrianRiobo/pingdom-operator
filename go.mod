@@ -3,10 +3,21 @@ module github.com/adrianRiobo/pingdom-operator
 go 1.13
 
 require (
+	github.com/Masterminds/vcs v1.13.1 // indirect
+	github.com/armon/go-radix v1.0.0 // indirect
 	github.com/go-logr/logr v0.1.0
+	github.com/golang/dep v0.5.4 // indirect
+	github.com/golang/protobuf v1.3.5 // indirect
+	github.com/jmank88/nuts v0.4.0 // indirect
+	github.com/nightlyone/lockfile v1.0.0 // indirect
 	github.com/operator-framework/operator-sdk v0.15.2
+	github.com/pelletier/go-toml v1.6.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/russellcardullo/go-pingdom v1.0.0
+	github.com/sdboyer/constext v0.0.0-20170321163424-836a14457353 // indirect
 	github.com/spf13/pflag v1.0.5
+	golang.org/x/sys v0.0.0-20200302150141-5c8b2ff67527 // indirect
+	gopkg.in/yaml.v2 v2.2.8 // indirect
 	k8s.io/api v0.0.0
 	k8s.io/apimachinery v0.0.0
 	k8s.io/client-go v12.0.0+incompatible
