@@ -3,6 +3,7 @@ package pingdomcheck
 import (
 	"context"
     	"testing"
+	"errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     	monitoringv1alpha1 "github.com/adrianRiobo/pingdom-operator/pkg/apis/monitoring/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -16,11 +17,12 @@ import (
 )
 
 const (
-	name            = "pingdom-operator"
-	namespace       = "pingdom"
-	check_name      = "unit-test"
-        check_url      	= "https://unit.test"
-        check_id        = 5123
+	name            	= "pingdom-operator"
+	namespace       	= "pingdom"
+	check_name      	= "unit-test"
+ 	check_name_update 	= "unit-test-update"
+        check_url      	  	= "https://unit.test"
+        check_id        	= 5123
 )
 
 type MockPingdomClient struct{
@@ -42,44 +44,104 @@ func (m *MockPingdomClient) DeleteHttpPingdomCheck(reqLogger logr.Logger, ID int
         return args.Error(0)
 }
 
-func TestPingdomCheckControllerNewCheckOk(t *testing.T) {
+func TestPingdomCheckControllerCreateCheckOk(t *testing.T) {
 
-	// create an instance of our test object
+	// Mock pingdomClient
   	mockPingdomClient := new(MockPingdomClient)
-  	// setup expectations
 	mockPingdomClient.On("CreateHttpPingdomCheck", check_name, check_url).Return(check_id, nil)
-
-       // Objects to track in the fake client.
-	objs := []runtime.Object{
-		getPingdomCheckCR(),
-	}
-	// Register operator types with the runtime scheme.
-	s := scheme.Scheme
-	s.AddKnownTypes(monitoringv1alpha1.SchemeGroupVersion, getPingdomCheckCR())
-	// Create a fake client to mock API calls.
-	cl := fake.NewFakeClient(objs...)
-	r := &ReconcilePingdomCheck{client: cl, scheme: s, pingdomClient: mockPingdomClient}
-	// Reconcile()
+	// Get reconcile with mocked pingdom client and fake k8s client
+       	r := getMockedReconciler(mockPingdomClient, getPingdomCheckCR())
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      name,
 			Namespace: namespace,
 		},
 	}
-	//res
-	_, err := r.Reconcile(req)
+	res, err := r.Reconcile(req)
 	if err != nil {
 		t.Fatalf("reconcile: (%v)", err)
 	}
-        // Get CR to check its status
+        // Get CR to check if status was updated
 	p := &monitoringv1alpha1.PingdomCheck{}
-	err = cl.Get(context.TODO(), req.NamespacedName, p)
+	err = r.client.Get(context.TODO(), req.NamespacedName, p)
 	if err != nil {
 		t.Fatalf("get deployment: (%v)", err)
 	}
+	if res != (reconcile.Result{}) {
+                t.Error("reconcile did not return an empty Result")
+        }
  	assert.Equal(t, check_id, p.Status.ID, "should be update state with same ID")
+}
 
-	
+func TestPingdomCheckControllerCreateCheckError(t *testing.T) {
+
+        // Mock pingdomClient
+        mockPingdomClient := new(MockPingdomClient)
+        mockPingdomClient.On("CreateHttpPingdomCheck", check_name, check_url).Return(0, errors.New("Error callling pingdom API"))
+        // Get reconcile with mocked pingdom client and fake k8s client
+        r := getMockedReconciler(mockPingdomClient, getPingdomCheckCR())
+        req := reconcile.Request{
+                NamespacedName: types.NamespacedName{
+                        Name:      name,
+                        Namespace: namespace,
+                },
+        }
+        _, err := r.Reconcile(req)
+	assert.NotEqual(t, err, nil, "should be an error")
+}
+
+
+func TestPingdomCheckControllerUpdateCheckOk(t *testing.T) {
+
+        // Mock pingdomClient
+        mockPingdomClient := new(MockPingdomClient)
+        mockPingdomClient.On("UpdateHttpPingdomCheck", check_id, check_name_update, check_url).Return(nil)
+        // Get reconcile with mocked pingdom client and fake k8s client
+        r := getMockedReconciler(mockPingdomClient, getExistingPingdomCheckCR())
+        req := reconcile.Request{
+                NamespacedName: types.NamespacedName{
+                        Name:      name,
+                        Namespace: namespace,
+                },
+        }
+        res, err := r.Reconcile(req)
+        if err != nil {
+                t.Fatalf("reconcile: (%v)", err)
+        }
+	assert.Equal(t, res, reconcile.Result{}, "Nothing to reconcile")
+}
+
+func TestPingdomCheckControllerUpdateCheckError(t *testing.T) {
+
+        // Mock pingdomClient
+        mockPingdomClient := new(MockPingdomClient)
+        mockPingdomClient.On("UpdateHttpPingdomCheck", check_id, check_name_update, check_url).Return(errors.New("Error callling pingdom API"))
+        // Get reconcile with mocked pingdom client and fake k8s client
+        r := getMockedReconciler(mockPingdomClient, getExistingPingdomCheckCR())
+        req := reconcile.Request{
+                NamespacedName: types.NamespacedName{
+                        Name:      name,
+                        Namespace: namespace,
+                },
+        }
+        _, err := r.Reconcile(req)
+	assert.NotEqual(t, err, nil, "should be an error")
+}
+
+//TODO add Delete tests
+
+// Get controller to test with mocked dependecies
+func getMockedReconciler(mockPingdomClient PingdomClient, pingodomcheckCR *monitoringv1alpha1.PingdomCheck) (*ReconcilePingdomCheck) {
+        // Objects to track in the fake client.
+        objs := []runtime.Object{
+                pingodomcheckCR,
+        }
+        // Register operator types with the runtime scheme.
+        s := scheme.Scheme
+        s.AddKnownTypes(monitoringv1alpha1.SchemeGroupVersion, pingodomcheckCR)
+        // Create a fake client to mock API calls.
+        cl := fake.NewFakeClient(objs...)
+        return &ReconcilePingdomCheck{client: cl, scheme: s, pingdomClient: mockPingdomClient}
 }
 
 // Create static CRD for unit testing
@@ -96,3 +158,22 @@ func getPingdomCheckCR() *monitoringv1alpha1.PingdomCheck {
 	}
 
 }
+
+// Create static CRD for unit testing
+func getExistingPingdomCheckCR() *monitoringv1alpha1.PingdomCheck {
+        return &monitoringv1alpha1.PingdomCheck{
+                ObjectMeta: metav1.ObjectMeta{
+                        Name:      name,
+                        Namespace: namespace,
+                },
+                Spec: monitoringv1alpha1.PingdomCheckSpec{
+                        Name: check_name_update,
+                        URL: check_url,
+                },
+		Status: monitoringv1alpha1.PingdomCheckStatus{
+			ID: check_id,
+		},
+        }
+
+}
+

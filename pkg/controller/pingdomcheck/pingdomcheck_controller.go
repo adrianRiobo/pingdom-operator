@@ -151,6 +151,7 @@ func (r *ReconcilePingdomCheck) createHttpPingdomCheck(reqLogger logr.Logger, p 
 	ID, err := r.pingdomClient.CreateHttpPingdomCheck(reqLogger, p.Spec.Name, p.Spec.URL)
         if err != nil {
            log.Error(err, "Error creating check")
+           return err
         } else {
            p.Status.ID = ID
            err := r.client.Status().Update(context.TODO(), p)
