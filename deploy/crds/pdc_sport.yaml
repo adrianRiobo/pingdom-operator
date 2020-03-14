@@ -3,5 +3,5 @@ kind: PingdomCheck
 metadata:
   name: sport
 spec:
-  name: sport-update
+  name: sport-final
   url: https://www.sport.es

@@ -31,6 +31,8 @@ docker push adrianriobo/pingdom-operator:0.1
 ```
 # Testing 
 
+Unit testing will be implemented using [testify framework](https://github.com/stretchr/testify)  
+
 ```
 # Unit testing 
 go test pkg/controller/pingdomcheck/*

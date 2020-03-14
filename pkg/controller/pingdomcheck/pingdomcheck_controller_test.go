@@ -1,19 +1,17 @@
 package pingdomcheck
 
 import (
-    	//"context"
+	"context"
     	"testing"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
     	monitoringv1alpha1 "github.com/adrianRiobo/pingdom-operator/pkg/apis/monitoring/v1alpha1"
 	"k8s.io/apimachinery/pkg/runtime"
     	"k8s.io/client-go/kubernetes/scheme" 
  	"k8s.io/apimachinery/pkg/types"
-    	//"sigs.k8s.io/controller-runtime/pkg/client"
     	"sigs.k8s.io/controller-runtime/pkg/client/fake" 
-     	"sigs.k8s.io/controller-runtime/pkg/reconcile"
-        "github.com/russellcardullo/go-pingdom/pingdom" 
+     	"sigs.k8s.io/controller-runtime/pkg/reconcile" 
         "github.com/stretchr/testify/mock"
-       	//"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/assert"
  	"github.com/go-logr/logr"
 )
 
@@ -48,53 +46,40 @@ func TestPingdomCheckControllerNewCheckOk(t *testing.T) {
 
 	// create an instance of our test object
   	mockPingdomClient := new(MockPingdomClient)
-
   	// setup expectations
-  	mockPingdomClient.On("CreateHttpPingdomCheck", mock.Anything, check_name, check_url).Return(check_id, nil)
-
-	//Assertion should check status from CR agaisnt check_id
-	//mockPingdomClient.AssertExpectations(t)
-	//expect.Equal(t, mockThing, actual, "should return a Thing")
-
-
-
-	pingdomcheck := getPingdomCheckCR()
+	mockPingdomClient.On("CreateHttpPingdomCheck", check_name, check_url).Return(check_id, nil)
 
        // Objects to track in the fake client.
 	objs := []runtime.Object{
-		pingdomcheck,
+		getPingdomCheckCR(),
 	}
-
 	// Register operator types with the runtime scheme.
 	s := scheme.Scheme
-	s.AddKnownTypes(monitoringv1alpha1.SchemeGroupVersion, pingdomcheck)
+	s.AddKnownTypes(monitoringv1alpha1.SchemeGroupVersion, getPingdomCheckCR())
 	// Create a fake client to mock API calls.
 	cl := fake.NewFakeClient(objs...)
-	// Create a PingdomCheck object with the scheme and fake client.
-        pingdomClient, err := pingdom.NewClientWithConfig(pingdom.ClientConfig{
-                User:     "user",
-                Password: "password",
-                APIKey:   "apikey",
-        })
-
-	r := &ReconcilePingdomCheck{client: cl, scheme: s, pingdomClient: pingdomClient}
-
-	// Mock request to simulate Reconcile() being called on an event for a
-	// watched resource .
+	r := &ReconcilePingdomCheck{client: cl, scheme: s, pingdomClient: mockPingdomClient}
+	// Reconcile()
 	req := reconcile.Request{
 		NamespacedName: types.NamespacedName{
 			Name:      name,
 			Namespace: namespace,
 		},
 	}
-	res, err := r.Reconcile(req)
+	//res
+	_, err := r.Reconcile(req)
 	if err != nil {
 		t.Fatalf("reconcile: (%v)", err)
 	}
-	// Check the result of reconciliation to make sure it has the desired state.
-	if !res.Requeue {
-		t.Error("reconcile did not requeue request as expected")
+        // Get CR to check its status
+	p := &monitoringv1alpha1.PingdomCheck{}
+	err = cl.Get(context.TODO(), req.NamespacedName, p)
+	if err != nil {
+		t.Fatalf("get deployment: (%v)", err)
 	}
+ 	assert.Equal(t, check_id, p.Status.ID, "should be update state with same ID")
+
+	
 }
 
 // Create static CRD for unit testing
