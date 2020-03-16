@@ -51,9 +51,12 @@ kubectl create -f deploy/service_account.yaml
 kubectl create -f deploy/role.yaml
 kubectl create -f deploy/role_binding.yaml
 # Setup the CRD
-kubectl create -f deploy/crds/monitoring.adrianriobo.com_pingdomchecks_crd.yaml
+kubectl create -f deploy/crds/crd.yaml  
 # Deploy the app-operator
 kubectl create -f deploy/operator.yaml
 # Deploy pingdom check
-kubectl create -f deploy/crds/monitoring.adrianriobo.com_v1alpha1_pingdomcheck_cr.yaml
+kubectl create -f deploy/crds/pdc_google.yaml
+kubectl create -f deploy/crds/pdc_sport.yaml
+kubectl edit ...
+kubectl delete ..
 ```
