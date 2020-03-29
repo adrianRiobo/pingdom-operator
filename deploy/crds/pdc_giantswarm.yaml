@@ -1,0 +1,7 @@
+apiVersion: monitoring.adrianriobo.com/v1alpha1
+kind: PingdomCheck
+metadata:
+  name: giantswarm
+spec:
+  name: giantswarm
+  url: https://www.giantswarm.io/

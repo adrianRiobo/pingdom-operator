@@ -40,6 +40,8 @@ go test pkg/controller/pingdomcheck/*
 
 # Deploy
 
+Important due to used version within Pingdom: 2.1 APIKEY should be created [here](https://my.pingdom.com/app/account/appkeys)
+
 ```
 # Create pingdom credentials
 deploy/secrets/create_secret.sh username password apikey

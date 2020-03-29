@@ -42,7 +42,10 @@ func (rc *RCPingdomClient) CreateHttpPingdomCheck(reqLogger logr.Logger, name st
         newCheck := pingdom.HttpCheck{Name: name, Hostname: parsedUrl.Host, Resolution: httpCheckResolution}
 	log.Info("Calling pingdom API to create a check", " with name ", name, " and url", Url)
         check, err := rc.innerClient.Checks.Create(&newCheck)
-        return check.ID, err
+        if err != nil {
+                return 0, err
+        }
+        return check.ID, nil
 }
 
 // Update http pingdomcheck
